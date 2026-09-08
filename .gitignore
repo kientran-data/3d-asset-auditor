@@ -38,4 +38,4 @@ reports/
 samples/
 test-assets/
 .pytest_cache/
-steering wheel/
+steering wheel/generate_report.py
