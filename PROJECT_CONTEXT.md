@@ -11,10 +11,27 @@ The tool crawls directories containing thousands of unorganized 3D models and ge
 2. **Read-Only / Immutable Sources:** The scanner and analyzer must NEVER modify original source assets.
 3. **Resiliency:** The system must handle thousands of files. A corrupt model must crash only its isolated worker process, not the entire batch.
 4. **Resumable:** Every file has its own independent processing state and fingerprint. Interrupted scans can resume exactly where they left off.
-5. **Architectural Separation:** 
+5. **Architectural Separation:**
    - **Scanner:** infers facts about files on disk.
    - **Analyzer:** infers facts contained inside 3D assets.
    - **Classifier:** infers meaning/brand/category.
    - **Assessment:** determines commercial/sell-readiness quality.
    - **Renderer:** generates visual representations.
 6. **Blender Security:** Blender subprocesses must run with auto-execution of embedded scripts disabled by default from startup.
+
+## Current Phase
+**Phase 1 — File Inventory**
+
+**Status:** VALIDATED
+
+All Phase 1 acceptance criteria have been verified by 49 automated tests covering:
+- Format classification for all 11 recognized extensions
+- Path semantics (relative_path, directory_depth, top_level_directory, parent_directory)
+- Rescan behavior (unchanged preserves UUID, changed resets downstream states, missing preserved in DB)
+- Safe missing-file reconciliation (skipped when directory errors occur)
+- Export validation (CSV, JSON with Unicode preservation)
+- SQLite persistence across connections
+- Symlink safety, permission error handling, Unicode paths, spaces in paths
+
+## Next Phase
+**Phase 2A — Blender integration for .blend**

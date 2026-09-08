@@ -7,9 +7,14 @@ name = "3d-asset-auditor"
 version = "0.1.0"
 description = "A local-first application to audit and catalog 3D assets."
 requires-python = ">=3.10"
-dependencies = [
-    # to be populated during implementation
-]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/asset_auditor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
