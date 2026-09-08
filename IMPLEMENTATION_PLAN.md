@@ -11,13 +11,14 @@
 - Generate lightweight fingerprints (`size` + `mtime`).
 - Implement basic CSV and JSON inventory exporters.
 
-## Phase 2A — GLB / GLTF Blender analysis
+## Phase 2A — GLB / GLTF Blender Analysis ✅ VALIDATED (Blender 4.0.2)
 - Implement isolated Blender runner subprocess with timeout handling.
 - Create Blender Python script to import and inspect `.glb`/`.gltf` files.
 - Capture run metrics (duration, exit codes, Blender version).
 - Extract scene, geometry, material/image counts, bounding box, units.
 - Store results in `analysis_runs` + `asset_geometry` tables.
 
+**Validation Constraints:** Phase 2A is explicitly validated against **Blender 4.0.2** (`/usr/bin/blender`).
 **Why GLB first:** Real library scan showed 13/13 assets are `.glb`.
 
 ## Phase 2B — BLEND

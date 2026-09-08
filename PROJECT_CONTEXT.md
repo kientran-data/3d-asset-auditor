@@ -29,15 +29,20 @@ The tool crawls directories containing thousands of unorganized 3D models and ge
 ## Current Phase
 **Phase 2A — GLB / GLTF Blender Analysis**
 
-**Status:** IMPLEMENTED — awaiting Blender installation for real library pilot
+**Status:** IMPLEMENTED, REAL_BLENDER_INTEGRATION_VALIDATED, REAL_PILOT_VALIDATED. 
+**Note:** Phase 2A is explicitly validated against **Blender 4.0.2** at `/usr/bin/blender`. Do not claim compatibility with other versions unless formally tested.
+
+**Phase 2A.1 — Full Library Analysis**
+**Status:** REAL_LIBRARY_ANALYZED (13/13 SUCCESS).
 
 ## Phase History
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 0 | Architecture & documentation | ✅ DONE |
-| Phase 1 | File inventory scanner | ✅ VALIDATED |
-| Phase 1.1 | Validation & hardening | ✅ VALIDATED |
-| Phase 2A | GLB / GLTF Blender analysis | IMPLEMENTED |
+| Phase 1 | Inventory Scanner (MVP formats) | ✅ DONE |
+| Phase 1.1 | Hardening & Rescan correctness | ✅ DONE |
+| Phase 2A | GLB/GLTF Blender Analysis pipeline | ✅ VALIDATED |
+| Phase 2A.1 | Analyze full existing GLB library | ✅ REAL_LIBRARY_ANALYZED |
+| Phase 2B | BLEND file analysis | ⏳ PENDING |
 
 ## Next Phase
 **Phase 2B — BLEND analysis** (after Phase 2A pilot approval)

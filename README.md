@@ -26,7 +26,7 @@ python -m asset_auditor analyze --retry-failed
 ## Prerequisites
 
 - Python ≥ 3.10
-- Blender (for Phase 2+ analysis) — set `BLENDER_EXECUTABLE` if not in PATH
+- Blender (Phase 2A is **validated ONLY against Blender 4.0.2**) — set `BLENDER_EXECUTABLE` if not in PATH.
 
 ## CLI Commands
 
@@ -55,7 +55,7 @@ python -m asset_auditor analyze "/path/to/models" \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BLENDER_EXECUTABLE` | `blender` | Path to Blender binary |
+| `BLENDER_EXECUTABLE` | `blender` | Path to Blender binary (Validated: `/usr/bin/blender` for v4.0.2) |
 | `ANALYSIS_TIMEOUT` | `120` | Per-asset timeout in seconds |
 
 ## Supported Formats

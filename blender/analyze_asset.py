@@ -21,6 +21,9 @@ Bounding box semantics:
     - Blender coordinate system: X=right, Y=forward, Z=up
 """
 import sys
+import os
+sys.path.append(os.path.expanduser("~/.local/lib/python3.12/site-packages"))
+
 import json
 import argparse
 import traceback
