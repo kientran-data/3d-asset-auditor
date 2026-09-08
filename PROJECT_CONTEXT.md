@@ -42,6 +42,8 @@ The tool crawls directories containing thousands of unorganized 3D models and ge
 | Phase 1.1 | Hardening & Rescan correctness | ✅ DONE |
 | Phase 2A | GLB/GLTF Blender Analysis pipeline | ✅ VALIDATED |
 | Phase 2A.1 | Analyze full existing GLB library | ✅ REAL_LIBRARY_ANALYZED |
+| Phase 3A | Deep Material / Texture / UV Analysis | ✅ COMPLETED |
+| Phase 3B | Automatic Thumbnail Rendering | ✅ COMPLETED / FULL_LIBRARY_RENDERED |
 | Phase 2B | BLEND file analysis | ⏳ PENDING |
 
 ## Next Phase

@@ -4,7 +4,7 @@ This script runs INSIDE a Blender subprocess. It is invoked as:
 
     blender --background --factory-startup --disable-autoexec \
         --python blender/analyze_asset.py \
-        -- --input <asset_path> --output <result_json> --asset-id <uuid>
+        -- --input <asset_path> --output <result_json> --asset-id <uuid> [--deep]
 
 It imports the asset, collects geometry/scene/material metrics,
 computes a world-space bounding box, and writes a structured JSON result.
@@ -31,7 +31,7 @@ from mathutils import Vector
 
 import bpy
 
-ANALYSIS_SCHEMA_VERSION = "1"
+ANALYSIS_SCHEMA_VERSION = "2"
 
 
 def parse_args():
@@ -45,6 +45,7 @@ def parse_args():
     parser.add_argument("--input", required=True, help="Path to asset file")
     parser.add_argument("--output", required=True, help="Path to write result JSON")
     parser.add_argument("--asset-id", required=True, help="Asset UUID")
+    parser.add_argument("--deep", action="store_true", help="Run Deep Analysis")
     return parser.parse_args(argv)
 
 
@@ -122,11 +123,7 @@ def collect_geometry() -> dict:
 
 
 def collect_bounding_box() -> dict:
-    """Compute overall world-space bounding box across all mesh objects.
-
-    Takes object transforms (matrix_world) into account.
-    Blender axes: X=right, Y=forward, Z=up.
-    """
+    """Compute overall world-space bounding box across all mesh objects."""
     all_coords = []
     for obj in bpy.data.objects:
         if obj.type == "MESH" and obj.data:
@@ -170,6 +167,202 @@ def collect_units() -> dict:
     }
 
 
+def collect_materials() -> list:
+    results = []
+    for idx, mat in enumerate(bpy.data.materials):
+        use_nodes = getattr(mat, "use_nodes", False)
+        node_count = 0
+        img_node_count = 0
+        principled_count = 0
+        if use_nodes and mat.node_tree:
+            node_count = len(mat.node_tree.nodes)
+            img_node_count = sum(1 for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE')
+            principled_count = sum(1 for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+        
+        results.append({
+            "index": idx,
+            "name": mat.name,
+            "use_nodes": use_nodes,
+            "node_count": node_count,
+            "image_texture_node_count": img_node_count,
+            "principled_bsdf_count": principled_count,
+        })
+    return results
+
+
+def collect_images() -> list:
+    results = []
+    for idx, img in enumerate(bpy.data.images):
+        packed = img.packed_file is not None
+        source_type = img.source
+        
+        # Resource precedence
+        if source_type == 'GENERATED':
+            resource_status = 'GENERATED'
+        elif packed:
+            resource_status = 'PACKED'
+        elif img.filepath and img.filepath != "":
+            resolved = bpy.path.abspath(img.filepath)
+            exists = os.path.exists(resolved)
+            resource_status = 'EXTERNAL_PRESENT' if exists else 'EXTERNAL_MISSING'
+        else:
+            resource_status = 'UNKNOWN'
+        
+        exists_on_disk = None
+        if resource_status == 'EXTERNAL_PRESENT':
+            exists_on_disk = 1
+        elif resource_status == 'EXTERNAL_MISSING':
+            exists_on_disk = 0
+
+        results.append({
+            "index": idx,
+            "name": img.name,
+            "width": img.size[0],
+            "height": img.size[1],
+            "channels": img.channels,
+            "file_format": img.file_format,
+            "source_type": source_type,
+            "colorspace_name": img.colorspace_settings.name,
+            "packed": packed,
+            "original_filepath": img.filepath,
+            "resolved_filepath": bpy.path.abspath(img.filepath) if img.filepath else None,
+            "exists_on_disk": exists_on_disk,
+            "resource_status": resource_status,
+        })
+    return results
+
+
+def trace_texture_roles() -> list:
+    results = []
+    image_idx_map = {img.name: i for i, img in enumerate(bpy.data.images)}
+    
+    for mat_idx, mat in enumerate(bpy.data.materials):
+        if not mat.use_nodes or not mat.node_tree:
+            continue
+            
+        mat_output = next((n for n in mat.node_tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        principled = next((n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        
+        # Keep track of already emitted roles for an image in a material to prevent dupes
+        emitted_links = set()
+
+        def trace_socket(socket) -> list:
+            found_images = []
+            if not socket.is_linked:
+                return found_images
+            for link in socket.links:
+                from_node = link.from_node
+                if from_node.type == 'TEX_IMAGE' and from_node.image:
+                    found_images.append(from_node)
+                elif from_node.type == 'NORMAL_MAP':
+                    if 'Color' in from_node.inputs:
+                        found_images.extend(trace_socket(from_node.inputs['Color']))
+                else:
+                    for in_sock in from_node.inputs:
+                        found_images.extend(trace_socket(in_sock))
+            return found_images
+
+        def process_socket(socket, role_name):
+            if socket:
+                img_nodes = trace_socket(socket)
+                for node in img_nodes:
+                    if node.image and node.image.name in image_idx_map:
+                        img_idx = image_idx_map[node.image.name]
+                        # Avoid emitting exact duplicates for same role/node
+                        link_key = (img_idx, role_name, node.name)
+                        if link_key in emitted_links:
+                            continue
+                        emitted_links.add(link_key)
+                        
+                        uv_map_name = None
+                        uv_mapping_source = "DEFAULT"
+                        
+                        if 'Vector' in node.inputs and node.inputs['Vector'].is_linked:
+                            for l in node.inputs['Vector'].links:
+                                if l.from_node.type == 'UVMAP':
+                                    uv_mapping_source = "EXPLICIT_UV_MAP"
+                                    uv_map_name = l.from_node.uv_map
+                                    break
+                                elif l.from_node.type == 'TEX_COORD':
+                                    uv_mapping_source = "OTHER"
+                                    
+                        results.append({
+                            "material_index": mat_idx,
+                            "image_index": img_idx,
+                            "node_name": node.name,
+                            "texture_role": role_name,
+                            "uv_mapping_source": uv_mapping_source,
+                            "uv_map_name": uv_map_name
+                        })
+
+        roles = {
+            'BASE_COLOR': 'Base Color',
+            'ROUGHNESS': 'Roughness',
+            'METALLIC': 'Metallic',
+            'NORMAL': 'Normal',
+            'ALPHA': 'Alpha',
+            'EMISSION': 'Emission Color', 
+        }
+        
+        if principled:
+            for role_name, socket_name in roles.items():
+                socket = principled.inputs.get(socket_name)
+                if not socket and role_name == 'EMISSION':
+                    socket = principled.inputs.get('Emission')
+                process_socket(socket, role_name)
+                            
+        if mat_output:
+            disp_socket = mat_output.inputs.get('Displacement')
+            process_socket(disp_socket, 'DISPLACEMENT')
+
+    return results
+
+
+def collect_uv_summary() -> list:
+    results = []
+    for mesh_idx, mesh in enumerate(bpy.data.meshes):
+        uv_layers = mesh.uv_layers
+        layer_names = [layer.name for layer in uv_layers]
+        active_layer = uv_layers.active.name if uv_layers.active else None
+        
+        results.append({
+            "mesh_index": mesh_idx,
+            "mesh_name": mesh.name,
+            "uv_layer_count": len(layer_names),
+            "uv_layer_names": layer_names,
+            "active_uv_layer": active_layer,
+            "has_uv": len(layer_names) > 0,
+        })
+    return results
+
+
+def collect_mesh_materials() -> list:
+    results = []
+    mesh_idx_map = {mesh.name: i for i, mesh in enumerate(bpy.data.meshes)}
+    mat_idx_map = {mat.name: i for i, mat in enumerate(bpy.data.materials)}
+    
+    for obj_idx, obj in enumerate(bpy.data.objects):
+        if obj.type == 'MESH' and obj.data:
+            mesh_idx = mesh_idx_map.get(obj.data.name)
+            if mesh_idx is None:
+                continue
+                
+            for slot_idx, slot in enumerate(obj.material_slots):
+                if slot.material:
+                    mat_idx = mat_idx_map.get(slot.material.name)
+                    if mat_idx is not None:
+                        results.append({
+                            "object_index": obj_idx,
+                            "object_name": obj.name,
+                            "mesh_index": mesh_idx,
+                            "mesh_name": obj.data.name,
+                            "material_index": mat_idx,
+                            "material_slot_index": slot_idx,
+                            "material_link_mode": slot.link,
+                        })
+    return results
+
+
 def main():
     args = parse_args()
     blender_version = ".".join(str(x) for x in bpy.app.version)
@@ -181,6 +374,7 @@ def main():
         "status": "SUCCESS",
         "blender_version": blender_version,
         "error": None,
+        "analysis_profile": "DEEP" if args.deep else "BASIC",
         "scene": None,
         "geometry": None,
         "materials": None,
@@ -204,12 +398,27 @@ def main():
         sys.exit(1)
 
     try:
+        # Always run basic
         result["scene"] = collect_scene_info()
         result["geometry"] = collect_geometry()
         result["bounding_box"] = collect_bounding_box()
         result["units"] = collect_units()
-        result["materials"] = {"count": len(bpy.data.materials)}
-        result["images"] = {"count": len(bpy.data.images)}
+        
+        # Collect materials/images count for BASIC geometry compatibility
+        mats_list = collect_materials()
+        imgs_list = collect_images()
+        
+        result["materials"] = {"count": len(mats_list)}
+        result["images"] = {"count": len(imgs_list)}
+
+        if args.deep:
+            # Override with full data
+            result["materials"] = mats_list
+            result["images"] = imgs_list
+            result["material_textures"] = trace_texture_roles()
+            result["uv_summary"] = collect_uv_summary()
+            result["mesh_materials"] = collect_mesh_materials()
+
     except Exception as e:
         result["status"] = "FAILED_ANALYSIS"
         result["error"] = {

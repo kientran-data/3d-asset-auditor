@@ -1,0 +1,69 @@
+{
+  "ruleset_version": "1.0.0",
+  "ruleset_name": "TECHNICAL_MARKETPLACE_V1",
+  "description": "First production ruleset for technical sell-readiness assessment of surface-mesh 3D marketplace assets.",
+  "rules": {
+    "NO_MESH_OBJECTS": {
+      "enabled": true,
+      "category": "geometry",
+      "severity": "BLOCKER",
+      "disposition": "NOT_SELLABLE",
+      "message_template": "The 3D model contains no mesh objects.",
+      "config": {}
+    },
+    "ZERO_GEOMETRY": {
+      "enabled": true,
+      "category": "geometry",
+      "severity": "BLOCKER",
+      "disposition": "NOT_SELLABLE",
+      "message_template": "Mesh objects exist but contain no renderable geometry ({vertices} vertices, {faces} faces). V1 targets surface-mesh assets.",
+      "config": {}
+    },
+    "INVALID_BOUNDING_BOX": {
+      "enabled": true,
+      "category": "geometry",
+      "severity": "BLOCKER",
+      "disposition": "NEEDS_FIX",
+      "message_template": "Bounding box spatial data is invalid: {reason}.",
+      "config": {
+        "epsilon": 1e-7
+      }
+    },
+    "NO_MATERIALS": {
+      "enabled": true,
+      "category": "materials",
+      "severity": "WARNING",
+      "disposition": "NONE",
+      "message_template": "No material datablocks were detected in the deep analysis.",
+      "config": {}
+    },
+    "EXTERNAL_MISSING_TEXTURE": {
+      "enabled": true,
+      "category": "textures",
+      "severity": "BLOCKER",
+      "disposition": "NEEDS_FIX",
+      "message_template": "{count} referenced external image resource(s) are missing.",
+      "config": {
+        "acceptable_resource_status": ["PACKED", "EXTERNAL_PRESENT", "GENERATED"]
+      }
+    },
+    "TEXTURED_MESH_WITHOUT_UV": {
+      "enabled": true,
+      "category": "uv",
+      "severity": "BLOCKER",
+      "disposition": "NEEDS_FIX",
+      "message_template": "Mesh '{mesh_name}' requires UV coordinates for material '{material_name}' but has no UV map.",
+      "config": {
+        "uv_dependent_sources": ["DEFAULT", "EXPLICIT_UV_MAP"]
+      }
+    },
+    "EXPLICIT_UV_LAYER_MISSING": {
+      "enabled": true,
+      "category": "uv",
+      "severity": "BLOCKER",
+      "disposition": "NEEDS_FIX",
+      "message_template": "Material texture explicitly requests UV map '{requested_uv}' but mesh '{mesh_name}' only has: {available_uvs}.",
+      "config": {}
+    }
+  }
+}

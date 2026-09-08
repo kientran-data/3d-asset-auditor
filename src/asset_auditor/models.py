@@ -19,6 +19,7 @@ class AssetRecord:
     format_status: str
     scan_status: str
     analysis_status: str
+    deep_analysis_status: str
     preview_status: str
     assessment_status: str
     discovered_at: str

@@ -326,31 +326,35 @@ class TestNonZeroExitCode:
 
 class TestResultValidation:
     def test_missing_result_json(self):
-        err = _validate_result({}, "abc-123")
-        assert err is not None  # missing schema_version
+        err = _validate_result({}, "abc-123", "BASIC")
+        assert "Missing schema_version" in err
 
     def test_malformed_result(self):
-        err = _validate_result({"schema_version": "1", "status": "SUCCESS", "asset_id": "abc"}, "abc")
-        assert err is not None  # missing sections on SUCCESS
+        err = _validate_result({"schema_version": "1", "status": "SUCCESS", "asset_id": "abc"}, "abc", "BASIC")
+        assert "Missing required section 'scene' on SUCCESS" in err
 
     def test_wrong_asset_id(self):
         err = _validate_result(
             {"schema_version": "1", "status": "SUCCESS", "asset_id": "wrong"},
-            "expected"
+            "expected",
+            "BASIC"
         )
-        assert "mismatch" in err
+        assert "asset_id mismatch" in err
 
     def test_valid_success(self):
         data = {
             "schema_version": "1",
             "status": "SUCCESS",
             "asset_id": "abc",
+            "analysis_profile": "BASIC",
             "scene": {},
             "geometry": {},
+            "materials": {"count": 1},
+            "images": {"count": 1},
             "bounding_box": {},
             "units": {},
         }
-        assert _validate_result(data, "abc") is None
+        assert _validate_result(data, "abc", "BASIC") is None
 
     def test_valid_failure_no_sections_needed(self):
         data = {
@@ -358,7 +362,7 @@ class TestResultValidation:
             "status": "FAILED_IMPORT",
             "asset_id": "abc",
         }
-        assert _validate_result(data, "abc") is None
+        assert _validate_result(data, "abc", "BASIC") is None
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +436,7 @@ class TestBatchContinuesAfterFailure:
 
         # Dynamically produce the right mock result based on which asset is dispatched
         first_call = [True]
-        def mock_side_effect(asset_id, asset_path, timeout=120):
+        def mock_side_effect(asset_id, asset_path, timeout=120, analysis_profile="BASIC"):
             if first_call[0]:
                 first_call[0] = False
                 return AnalysisResult(

@@ -23,8 +23,9 @@ def get_pending_assets(
     source_root: Optional[str] = None,
     asset_id: Optional[str] = None,
     include_failed: bool = False,
+    deep: bool = False,
 ) -> List[dict]:
-    """Query assets eligible for Phase 2A analysis."""
+    """Query assets eligible for analysis."""
     conditions = [
         "is_present = 1",
         "LOWER(extension) IN ('.glb', '.gltf')",
@@ -38,12 +39,21 @@ def get_pending_assets(
         conditions.append("source_root = ?")
         params.append(source_root)
 
-    if include_failed:
-        conditions.append(
-            "analysis_status IN ('PENDING', 'FAILED_IMPORT', 'FAILED_ANALYSIS', 'TIMEOUT')"
-        )
+    if deep:
+        conditions.append("analysis_status = 'SUCCESS'")
+        if include_failed:
+            conditions.append(
+                "deep_analysis_status IN ('PENDING', 'FAILED_IMPORT', 'FAILED_ANALYSIS', 'TIMEOUT')"
+            )
+        else:
+            conditions.append("deep_analysis_status = 'PENDING'")
     else:
-        conditions.append("analysis_status = 'PENDING'")
+        if include_failed:
+            conditions.append(
+                "analysis_status IN ('PENDING', 'FAILED_IMPORT', 'FAILED_ANALYSIS', 'TIMEOUT')"
+            )
+        else:
+            conditions.append("analysis_status = 'PENDING'")
 
     sql = f"SELECT asset_id, absolute_path, filename FROM assets WHERE {' AND '.join(conditions)}"
     cursor = conn.cursor()
@@ -60,12 +70,13 @@ def run_batch_analysis(
     asset_id: Optional[str] = None,
     include_failed: bool = False,
     timeout: int = ANALYSIS_TIMEOUT_SECONDS,
+    deep: bool = False,
 ) -> Dict[str, Any]:
-    """Run analysis on pending GLB/GLTF assets.
+    """Run analysis on eligible GLB/GLTF assets.
 
     Returns batch statistics.
     """
-    pending = get_pending_assets(conn, source_root, asset_id, include_failed)
+    pending = get_pending_assets(conn, source_root, asset_id, include_failed, deep)
     total = len(pending)
 
     stats = {
@@ -80,23 +91,25 @@ def run_batch_analysis(
         logger.info("No pending GLB/GLTF assets to analyze")
         return stats
 
-    logger.info("Starting analysis of %d asset(s)", total)
+    profile = "DEEP" if deep else "BASIC"
+    logger.info("Starting %s analysis of %d asset(s)", profile, total)
 
     for i, asset in enumerate(pending, 1):
         aid = asset["asset_id"]
         filename = asset["filename"]
         path = asset["absolute_path"]
 
-        print(f"[{i}/{total}] Analyzing {filename}...")
+        print(f"[{i}/{total}] {profile} Analyzing {filename}...")
 
         # Mark as ANALYZING
+        status_col = "deep_analysis_status" if deep else "analysis_status"
         conn.execute(
-            "UPDATE assets SET analysis_status = 'ANALYZING' WHERE asset_id = ?",
+            f"UPDATE assets SET {status_col} = 'ANALYZING' WHERE asset_id = ?",
             (aid,),
         )
         conn.commit()
 
-        result = run_blender_analysis(aid, path, timeout=timeout)
+        result = run_blender_analysis(aid, path, timeout=timeout, analysis_profile=profile)
 
         # Persist result
         persist_analysis_result(conn, result)

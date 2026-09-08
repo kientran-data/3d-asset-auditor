@@ -3,8 +3,15 @@ import os
 import shutil
 
 # Analyzer versioning
-ANALYZER_VERSION = "0.2.0"
-ANALYSIS_SCHEMA_VERSION = "1"
+ANALYZER_VERSION = "0.3.0"
+ANALYSIS_SCHEMA_VERSION = "2"
+
+# Renderer versioning
+RENDERER_VERSION = "0.1.0"
+PREVIEW_SCHEMA_VERSION = "1"
+
+# Assessor versioning
+ASSESSOR_VERSION = "0.1.0"
 
 # Blender configuration
 BLENDER_EXECUTABLE = os.environ.get("BLENDER_EXECUTABLE", "blender")

@@ -39,6 +39,7 @@ class AnalysisResult:
         blender_version: Optional[str] = None,
         analyzer_version: str = ANALYZER_VERSION,
         analysis_schema_version: str = ANALYSIS_SCHEMA_VERSION,
+        analysis_profile: str = "BASIC",
         started_at: str = "",
         finished_at: str = "",
         duration_ms: int = 0,
@@ -55,6 +56,7 @@ class AnalysisResult:
         self.blender_version = blender_version
         self.analyzer_version = analyzer_version
         self.analysis_schema_version = analysis_schema_version
+        self.analysis_profile = analysis_profile
         self.started_at = started_at
         self.finished_at = finished_at
         self.duration_ms = duration_ms
@@ -70,6 +72,7 @@ def run_blender_analysis(
     asset_id: str,
     asset_path: str,
     timeout: int = ANALYSIS_TIMEOUT_SECONDS,
+    analysis_profile: str = "BASIC",
 ) -> AnalysisResult:
     """Run Blender headless analysis on a single asset.
 
@@ -86,6 +89,7 @@ def run_blender_analysis(
             analysis_run_id=analysis_run_id,
             asset_id=asset_id,
             status="FAILED_ANALYSIS",
+            analysis_profile=analysis_profile,
             started_at=started_at,
             finished_at=datetime.now(UTC).isoformat(),
             duration_ms=0,
@@ -99,6 +103,7 @@ def run_blender_analysis(
             analysis_run_id=analysis_run_id,
             asset_id=asset_id,
             status="FAILED_ANALYSIS",
+            analysis_profile=analysis_profile,
             started_at=started_at,
             finished_at=datetime.now(UTC).isoformat(),
             duration_ms=0,
@@ -119,6 +124,8 @@ def run_blender_analysis(
         "--output", result_json_path,
         "--asset-id", asset_id,
     ]
+    if analysis_profile == "DEEP":
+        cmd.append("--deep")
 
     logger.debug("Running: %s", " ".join(cmd))
 
@@ -148,6 +155,7 @@ def run_blender_analysis(
                 analysis_run_id=analysis_run_id,
                 asset_id=asset_id,
                 status="TIMEOUT",
+                analysis_profile=analysis_profile,
                 started_at=started_at,
                 finished_at=end_time.isoformat(),
                 duration_ms=duration_ms,
@@ -171,6 +179,7 @@ def run_blender_analysis(
                 analysis_run_id=analysis_run_id,
                 asset_id=asset_id,
                 status="FAILED_ANALYSIS",
+                analysis_profile=analysis_profile,
                 started_at=started_at,
                 finished_at=end_time.isoformat(),
                 duration_ms=duration_ms,
@@ -189,6 +198,7 @@ def run_blender_analysis(
                 analysis_run_id=analysis_run_id,
                 asset_id=asset_id,
                 status="FAILED_ANALYSIS",
+                analysis_profile=analysis_profile,
                 started_at=started_at,
                 finished_at=end_time.isoformat(),
                 duration_ms=duration_ms,
@@ -200,12 +210,13 @@ def run_blender_analysis(
             )
 
         # Validate result contract
-        validation_error = _validate_result(result_data, asset_id)
+        validation_error = _validate_result(result_data, asset_id, analysis_profile)
         if validation_error:
             return AnalysisResult(
                 analysis_run_id=analysis_run_id,
                 asset_id=asset_id,
                 status="FAILED_ANALYSIS",
+                analysis_profile=analysis_profile,
                 started_at=started_at,
                 finished_at=end_time.isoformat(),
                 duration_ms=duration_ms,
@@ -219,6 +230,9 @@ def run_blender_analysis(
         # Map Blender-side status
         blender_status = result_data.get("status", "FAILED_ANALYSIS")
         blender_version = result_data.get("blender_version")
+        
+        # If Blender JSON produced DEEP sections but they are missing, it would fail validate_result.
+        # But if it returned FAILED_IMPORT or FAILED_ANALYSIS from blender side, we pass it.
 
         if blender_status == "FAILED_IMPORT":
             err = result_data.get("error", {})
@@ -227,6 +241,7 @@ def run_blender_analysis(
                 asset_id=asset_id,
                 status="FAILED_IMPORT",
                 blender_version=blender_version,
+                analysis_profile=analysis_profile,
                 started_at=started_at,
                 finished_at=end_time.isoformat(),
                 duration_ms=duration_ms,
@@ -236,12 +251,30 @@ def run_blender_analysis(
                 stdout_tail=stdout_tail,
                 stderr_tail=stderr_tail,
             )
+        elif blender_status == "FAILED_ANALYSIS":
+            err = result_data.get("error", {})
+            return AnalysisResult(
+                analysis_run_id=analysis_run_id,
+                asset_id=asset_id,
+                status="FAILED_ANALYSIS",
+                blender_version=blender_version,
+                analysis_profile=analysis_profile,
+                started_at=started_at,
+                finished_at=end_time.isoformat(),
+                duration_ms=duration_ms,
+                blender_exit_code=exit_code,
+                error_type=err.get("type", "AnalysisError"),
+                error_message=err.get("message", "Unknown analysis error"),
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            )
 
         return AnalysisResult(
             analysis_run_id=analysis_run_id,
             asset_id=asset_id,
             status="SUCCESS",
             blender_version=blender_version,
+            analysis_profile=analysis_profile,
             started_at=started_at,
             finished_at=end_time.isoformat(),
             duration_ms=duration_ms,
@@ -258,6 +291,7 @@ def run_blender_analysis(
             analysis_run_id=analysis_run_id,
             asset_id=asset_id,
             status="FAILED_ANALYSIS",
+            analysis_profile=analysis_profile,
             started_at=started_at,
             finished_at=end_time.isoformat(),
             duration_ms=duration_ms,
@@ -280,7 +314,7 @@ def _tail(data: bytes, max_bytes: int) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def _validate_result(data: dict, expected_asset_id: str) -> Optional[str]:
+def _validate_result(data: dict, expected_asset_id: str, analysis_profile: str) -> Optional[str]:
     """Validate the Blender result JSON contract. Returns error string or None."""
     if not isinstance(data, dict):
         return "Result is not a JSON object"
@@ -291,7 +325,16 @@ def _validate_result(data: dict, expected_asset_id: str) -> Optional[str]:
     if data.get("asset_id") != expected_asset_id:
         return f"asset_id mismatch: expected {expected_asset_id}, got {data.get('asset_id')}"
     if data["status"] == "SUCCESS":
+        # Always expect BASIC geometry sections because blender always computes them
         for section in ("scene", "geometry", "bounding_box", "units"):
             if section not in data or data[section] is None:
                 return f"Missing required section '{section}' on SUCCESS"
+        
+        # Deep sections
+        if analysis_profile == "DEEP":
+            if data.get("analysis_profile") != "DEEP":
+                return "Result JSON missing analysis_profile='DEEP'"
+            for section in ("materials", "images", "material_textures", "uv_summary", "mesh_materials"):
+                if section not in data or not isinstance(data[section], list):
+                    return f"Missing or invalid required DEEP section '{section}'"
     return None
