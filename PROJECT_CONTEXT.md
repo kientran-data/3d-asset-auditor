@@ -4,7 +4,7 @@
 **Purpose:** A local-first application designed to recursively scan, audit, and catalog massive local libraries of 3D assets without modifying the source files.
 
 ## Product Goal
-The tool crawls directories containing thousands of unorganized 3D models and generates a structured catalog. It identifies basic filesystem information and eventually performs deep analysis using Blender in a headless environment to extract detailed metadata (geometry, materials, textures, animations) and generate thumbnails.
+The tool crawls directories containing thousands of unorganized 3D models and generates a structured catalog. It identifies basic filesystem information and performs deep analysis using Blender in a headless environment to extract detailed metadata (geometry, materials, textures, animations) and generate thumbnails.
 
 ## Core Principles & Constraints
 1. **Local-First & Private:** All processing happens locally. No assets are committed to Git or uploaded.
@@ -19,19 +19,25 @@ The tool crawls directories containing thousands of unorganized 3D models and ge
    - **Renderer:** generates visual representations.
 6. **Blender Security:** Blender subprocesses must run with auto-execution of embedded scripts disabled by default from startup.
 
+## Real Library Findings
+- **Total 3D assets:** 13
+- **Total size:** 351.7 MB
+- **Format distribution:** 100% `.glb`
+- **Top-level directories:** AUDI (3), BMW (2), MERC (6), PORCHE (1), VW (1)
+- **Conclusion:** Phase 2A revised to target GLB/GLTF first (originally planned for .blend)
+
 ## Current Phase
-**Phase 1 — File Inventory**
+**Phase 2A — GLB / GLTF Blender Analysis**
 
-**Status:** VALIDATED
+**Status:** IMPLEMENTED — awaiting Blender installation for real library pilot
 
-All Phase 1 acceptance criteria have been verified by 49 automated tests covering:
-- Format classification for all 11 recognized extensions
-- Path semantics (relative_path, directory_depth, top_level_directory, parent_directory)
-- Rescan behavior (unchanged preserves UUID, changed resets downstream states, missing preserved in DB)
-- Safe missing-file reconciliation (skipped when directory errors occur)
-- Export validation (CSV, JSON with Unicode preservation)
-- SQLite persistence across connections
-- Symlink safety, permission error handling, Unicode paths, spaces in paths
+## Phase History
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 0 | Architecture & documentation | ✅ DONE |
+| Phase 1 | File inventory scanner | ✅ VALIDATED |
+| Phase 1.1 | Validation & hardening | ✅ VALIDATED |
+| Phase 2A | GLB / GLTF Blender analysis | IMPLEMENTED |
 
 ## Next Phase
-**Phase 2A — Blender integration for .blend**
+**Phase 2B — BLEND analysis** (after Phase 2A pilot approval)

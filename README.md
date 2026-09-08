@@ -13,7 +13,26 @@ pip install -e ".[dev]"
 # Scan a directory
 python -m asset_auditor scan "/path/to/your/3d-models"
 
-# With custom output paths
+# Analyze pending GLB/GLTF assets (requires Blender)
+python -m asset_auditor analyze "/path/to/your/3d-models"
+
+# Analyze a single asset by UUID
+python -m asset_auditor analyze --asset-id <uuid>
+
+# Retry failed analyses
+python -m asset_auditor analyze --retry-failed
+```
+
+## Prerequisites
+
+- Python ≥ 3.10
+- Blender (for Phase 2+ analysis) — set `BLENDER_EXECUTABLE` if not in PATH
+
+## CLI Commands
+
+### `scan` — Inventory scan (no Blender required)
+
+```bash
 python -m asset_auditor scan "/path/to/models" \
   --db reports/catalog.db \
   --csv reports/inventory.csv \
@@ -21,53 +40,39 @@ python -m asset_auditor scan "/path/to/models" \
   --verbose
 ```
 
-## CLI Usage
+### `analyze` — Blender headless analysis
 
-```
-usage: asset_auditor [-h] {scan} ...
-
-3D Asset Auditor — Local inventory scanner for 3D asset libraries.
-
-positional arguments:
-  {scan}      Available commands
-    scan      Scan a directory for 3D assets
-
-options:
-  -h, --help  show this help message and exit
+```bash
+python -m asset_auditor analyze "/path/to/models" \
+  --db reports/catalog.db \
+  --asset-id <uuid>        # optional: single asset
+  --retry-failed           # optional: include previously failed
+  --timeout 120            # optional: per-asset timeout (seconds)
+  --verbose
 ```
 
-### `scan` command
+## Configuration
 
-```
-usage: asset_auditor scan [-h] [--db DB] [--csv CSV] [--json JSON] [--verbose] path
-
-positional arguments:
-  path          Path to the 3D asset library
-
-options:
-  --db DB       Path to SQLite database (default: reports/catalog.db)
-  --csv CSV     Path to output CSV (default: reports/inventory.csv)
-  --json JSON   Path to output JSON (default: reports/inventory.json)
-  --verbose     Enable verbose/debug logging
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BLENDER_EXECUTABLE` | `blender` | Path to Blender binary |
+| `ANALYSIS_TIMEOUT` | `120` | Per-asset timeout in seconds |
 
 ## Supported Formats
 
-| Extension | Status | Deep Analysis |
-|-----------|--------|---------------|
-| `.blend`  | MVP_SUPPORTED | Phase 2A |
-| `.fbx`    | MVP_SUPPORTED | Phase 2B |
-| `.obj`    | MVP_SUPPORTED | Phase 2B |
-| `.glb`    | MVP_SUPPORTED | Phase 2B |
-| `.gltf`   | MVP_SUPPORTED | Phase 2B |
-| `.stl`    | MVP_SUPPORTED | Phase 2B |
+| Extension | Scan Status | Analysis Phase |
+|-----------|-------------|----------------|
+| `.glb`    | MVP_SUPPORTED | Phase 2A ← current |
+| `.gltf`   | MVP_SUPPORTED | Phase 2A ← current |
+| `.blend`  | MVP_SUPPORTED | Phase 2B |
+| `.fbx`    | MVP_SUPPORTED | Phase 2C |
+| `.obj`    | MVP_SUPPORTED | Phase 2C |
+| `.stl`    | MVP_SUPPORTED | Phase 2C |
 | `.ply`    | SUPPORTED_LATER | Future |
 | `.dae`    | SUPPORTED_LATER | Future |
 | `.3ds`    | SUPPORTED_LATER | Future |
 | `.max`    | UNSUPPORTED_FORMAT | N/A |
 | `.c4d`    | UNSUPPORTED_FORMAT | N/A |
-
-All recognized formats appear in inventory regardless of deep-analysis support.
 
 ## Running Tests
 

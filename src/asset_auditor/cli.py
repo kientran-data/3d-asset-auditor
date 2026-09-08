@@ -21,10 +21,11 @@ def setup_logging(verbose: bool):
 def main():
     parser = argparse.ArgumentParser(
         prog="asset_auditor",
-        description="3D Asset Auditor — Local inventory scanner for 3D asset libraries.",
+        description="3D Asset Auditor — Local inventory scanner and analyzer for 3D asset libraries.",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # --- scan command ---
     scan_parser = subparsers.add_parser("scan", help="Scan a directory for 3D assets")
     scan_parser.add_argument("path", help="Path to the 3D asset library")
     scan_parser.add_argument(
@@ -40,6 +41,32 @@ def main():
         "--verbose", action="store_true", help="Enable verbose/debug logging"
     )
 
+    # --- analyze command ---
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="Run Blender headless analysis on pending GLB/GLTF assets"
+    )
+    analyze_parser.add_argument(
+        "path", nargs="?", default=None,
+        help="Path to the asset library (source_root). If omitted, analyzes all pending assets in the DB."
+    )
+    analyze_parser.add_argument(
+        "--db", default="reports/catalog.db", help="Path to SQLite database"
+    )
+    analyze_parser.add_argument(
+        "--asset-id", default=None, help="Analyze a specific asset by UUID"
+    )
+    analyze_parser.add_argument(
+        "--retry-failed", action="store_true",
+        help="Include previously failed/timed-out assets"
+    )
+    analyze_parser.add_argument(
+        "--timeout", type=int, default=None,
+        help="Per-asset timeout in seconds (default: 120)"
+    )
+    analyze_parser.add_argument(
+        "--verbose", action="store_true", help="Enable verbose/debug logging"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -50,6 +77,8 @@ def main():
 
     if args.command == "scan":
         _run_scan(args)
+    elif args.command == "analyze":
+        _run_analyze(args)
 
 
 def _run_scan(args):
@@ -59,7 +88,6 @@ def _run_scan(args):
         print(f"Error: '{source_root}' is not a valid directory.", file=sys.stderr)
         sys.exit(1)
 
-    # Ensure output directories exist
     for path in (args.db, args.csv, args.json):
         parent = os.path.dirname(os.path.abspath(path))
         os.makedirs(parent, exist_ok=True)
@@ -73,15 +101,43 @@ def _run_scan(args):
         stats = scanner.scan()
         conn.execute("COMMIT")
 
-        # Export only present assets
         present_assets = list(repo.get_all_assets(source_root, present_only=True))
         export_to_csv(present_assets, args.csv)
         export_to_json(present_assets, source_root, stats, args.json)
 
-    _print_summary(source_root, stats, args)
+    _print_scan_summary(source_root, stats, args)
 
 
-def _print_summary(source_root: str, stats: dict, args):
+def _run_analyze(args):
+    from .analyzer.dispatcher import run_batch_analysis
+    from .config import ANALYSIS_TIMEOUT_SECONDS
+
+    if not os.path.isfile(args.db):
+        print(f"Error: Database not found at '{args.db}'. Run 'scan' first.", file=sys.stderr)
+        sys.exit(1)
+
+    source_root = os.path.abspath(args.path) if args.path else None
+    timeout = args.timeout if args.timeout else ANALYSIS_TIMEOUT_SECONDS
+
+    db = Database(args.db)
+    with db.get_connection() as conn:
+        stats = run_batch_analysis(
+            conn,
+            source_root=source_root,
+            asset_id=args.asset_id,
+            include_failed=args.retry_failed,
+            timeout=timeout,
+        )
+
+    print("\n3D Asset Auditor — Analysis Complete\n")
+    print(f"  Total dispatched: {stats['total']}")
+    print(f"  Success: {stats['success']}")
+    print(f"  Failed import: {stats['failed_import']}")
+    print(f"  Failed analysis: {stats['failed_analysis']}")
+    print(f"  Timeout: {stats['timeout']}\n")
+
+
+def _print_scan_summary(source_root: str, stats: dict, args):
     print("\n3D Asset Auditor — Inventory Complete\n")
     print("Source:")
     print(f"  {source_root}\n")
